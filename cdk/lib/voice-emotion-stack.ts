@@ -2,8 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
 
 export interface VoiceEmotionStackProps extends cdk.StackProps {
@@ -196,44 +194,15 @@ export class VoiceEmotionStack extends cdk.Stack {
       }),
     });
 
-    // Elastic IP for stable address (used by CloudFront origin)
+    // Elastic IP for stable address
     const eip = new ec2.CfnEIP(this, 'VoiceEmotionEIP', {
       domain: 'vpc',
       tags: [{ key: 'Name', value: 'VoiceEmotionDetector' }],
     });
 
-    // CloudFront Distribution for HTTPS access
-    const distribution = new cloudfront.Distribution(this, 'VoiceEmotionCDN', {
-      defaultBehavior: {
-        origin: new origins.HttpOrigin(eip.attrPublicIp, {
-          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-          httpPort: 80,
-        }),
-        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
-      },
-      // WebSocket support for Streamlit
-      additionalBehaviors: {
-        '/_stcore/*': {
-          origin: new origins.HttpOrigin(eip.attrPublicIp, {
-            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
-            httpPort: 80,
-          }),
-          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
-          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
-          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
-        },
-      },
-      priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // Cheapest - US, Canada, Europe
-      comment: 'Voice Emotion Detector CDN',
-    });
-
-    // Only output the CloudFront URL (public-facing)
+    // Output only the app URL (no sensitive details exposed)
     new cdk.CfnOutput(this, 'AppURL', {
-      value: `https://${distribution.distributionDomainName}`,
+      value: `http://${eip.attrPublicIp}`,
       description: 'Voice Emotion Detector URL',
     });
 
