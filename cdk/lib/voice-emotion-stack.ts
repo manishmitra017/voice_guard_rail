@@ -170,11 +170,10 @@ export class VoiceEmotionStack extends cdk.Stack {
           }),
         },
       ],
-      // Spot configuration
+      // Spot configuration - must use ONE_TIME for Auto Scaling Groups
       ...(useSpot && {
         spotOptions: {
-          requestType: ec2.SpotRequestType.PERSISTENT,
-          interruptionBehavior: ec2.SpotInstanceInterruption.STOP,
+          requestType: ec2.SpotRequestType.ONE_TIME,
           maxPrice: 0.05, // Max $0.05/hour (t3.medium spot is ~$0.01)
         },
       }),
