@@ -9,6 +9,12 @@ export interface VoiceEmotionStackProps extends cdk.StackProps {
    * @default t3.medium
    */
   instanceType?: string;
+
+  /**
+   * Use spot instances for cost savings (~70% cheaper)
+   * @default true
+   */
+  useSpotInstances?: boolean;
 }
 
 export class VoiceEmotionStack extends cdk.Stack {
@@ -16,6 +22,7 @@ export class VoiceEmotionStack extends cdk.Stack {
     super(scope, id, props);
 
     const instanceTypeStr = props?.instanceType ?? 't3.medium';
+    const useSpot = props?.useSpotInstances ?? true;
 
     // VPC - Use default VPC to save costs (no NAT Gateway)
     const vpc = ec2.Vpc.fromLookup(this, 'DefaultVPC', {
@@ -127,17 +134,13 @@ NGINXEOF`,
       'systemctl start nginx',
     );
 
-    // EC2 Instance (on-demand for reliability)
-    const instance = new ec2.Instance(this, 'VoiceEmotionInstance', {
-      vpc,
+    // Launch Template with optional Spot configuration
+    const launchTemplate = new ec2.LaunchTemplate(this, 'VoiceEmotionLT', {
       instanceType: new ec2.InstanceType(instanceTypeStr),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup,
       role,
       userData,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
       blockDevices: [
         {
           deviceName: '/dev/xvda',
@@ -147,12 +150,27 @@ NGINXEOF`,
           }),
         },
       ],
+      ...(useSpot && {
+        spotOptions: {
+          requestType: ec2.SpotRequestType.ONE_TIME,
+          maxPrice: 0.05, // Max $0.05/hour (t3.medium spot is ~$0.01)
+        },
+      }),
+    });
+
+    // EC2 Instance using Launch Template
+    const instance = new ec2.CfnInstance(this, 'VoiceEmotionInstance', {
+      launchTemplate: {
+        launchTemplateId: launchTemplate.launchTemplateId,
+        version: launchTemplate.latestVersionNumber,
+      },
+      subnetId: vpc.publicSubnets[0].subnetId,
     });
 
     // Elastic IP associated with the instance
     const eip = new ec2.CfnEIP(this, 'VoiceEmotionEIP', {
       domain: 'vpc',
-      instanceId: instance.instanceId,
+      instanceId: instance.ref,
       tags: [{ key: 'Name', value: 'VoiceEmotionDetector' }],
     });
 

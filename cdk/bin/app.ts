@@ -11,7 +11,8 @@ new VoiceEmotionStack(app, 'VoiceEmotionStack', {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: process.env.CDK_DEFAULT_REGION || 'ap-southeast-2',
   },
-  instanceType: 't3.medium',   // 4GB RAM + 4GB swap = enough for models
+  instanceType: 't3.medium',     // 4GB RAM + 4GB swap = enough for models
+  useSpotInstances: true,        // ~70% cheaper (~$12/month vs $30/month)
   description: 'Voice Emotion Detector - Real-time speech emotion recognition using AI',
 });
 
