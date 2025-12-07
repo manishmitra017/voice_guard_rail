@@ -1,36 +1,20 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import { Construct } from 'constructs';
 
 export interface VoiceEmotionStackProps extends cdk.StackProps {
   /**
-   * Use spot instances for cost savings (~70% cheaper)
-   * Risk: Can be interrupted with 2-min notice
-   * @default true
-   */
-  useSpotInstances?: boolean;
-
-  /**
-   * Instance type - t3.medium (4GB) or t3.large (8GB)
-   * t3.medium is tighter but cheaper
+   * Instance type - t3.medium (4GB) recommended
    * @default t3.medium
    */
   instanceType?: string;
-
-  /**
-   * Your domain name for the app (optional)
-   * If not provided, uses EC2 public IP
-   */
-  domainName?: string;
 }
 
 export class VoiceEmotionStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: VoiceEmotionStackProps) {
     super(scope, id, props);
 
-    const useSpot = props?.useSpotInstances ?? true;
     const instanceTypeStr = props?.instanceType ?? 't3.medium';
 
     // VPC - Use default VPC to save costs (no NAT Gateway)
@@ -45,21 +29,11 @@ export class VoiceEmotionStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // Allow HTTP/HTTPS and Streamlit port
-    securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(22),
-      'SSH access'
-    );
+    // Allow HTTP and Streamlit port
     securityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'HTTP access'
-    );
-    securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(443),
-      'HTTPS access'
     );
     securityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
@@ -80,15 +54,14 @@ export class VoiceEmotionStack extends cdk.Stack {
     userData.addCommands(
       '#!/bin/bash',
       'set -e',
+      'exec > >(tee /var/log/user-data.log) 2>&1',
 
       // Update system
       'yum update -y',
-      'yum install -y git docker python3.11 python3.11-pip',
+      'yum install -y git python3.11 python3.11-pip nginx',
 
-      // Install uv
-      'curl -LsSf https://astral.sh/uv/install.sh | sh',
-      'export PATH="$HOME/.local/bin:$PATH"',
-      'echo \'export PATH="$HOME/.local/bin:$PATH"\' >> /etc/profile.d/uv.sh',
+      // Install uv for ec2-user
+      'sudo -u ec2-user bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"',
 
       // Add swap for memory-constrained instances (4GB swap)
       'dd if=/dev/zero of=/swapfile bs=1M count=4096',
@@ -100,67 +73,71 @@ export class VoiceEmotionStack extends cdk.Stack {
       // Clone the repository
       'cd /home/ec2-user',
       'git clone https://github.com/manishmitra017/voice_guard_rail.git',
-      'cd voice_guard_rail',
       'chown -R ec2-user:ec2-user /home/ec2-user/voice_guard_rail',
 
-      // Install dependencies with uv
-      'sudo -u ec2-user /root/.local/bin/uv sync',
+      // Install dependencies with uv as ec2-user
+      'cd /home/ec2-user/voice_guard_rail',
+      'sudo -u ec2-user /home/ec2-user/.local/bin/uv sync',
 
       // Create systemd service
-      'cat > /etc/systemd/system/voice-emotion.service << \'EOF\'',
-      '[Unit]',
-      'Description=Voice Emotion Detector Streamlit App',
-      'After=network.target',
-      '',
-      '[Service]',
-      'Type=simple',
-      'User=ec2-user',
-      'WorkingDirectory=/home/ec2-user/voice_guard_rail',
-      'Environment="PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"',
-      'ExecStart=/home/ec2-user/.local/bin/uv run streamlit run app_cloud.py --server.port 8501 --server.address 0.0.0.0 --server.headless true',
-      'Restart=always',
-      'RestartSec=10',
-      '',
-      '[Install]',
-      'WantedBy=multi-user.target',
-      'EOF',
+      `cat > /etc/systemd/system/voice-emotion.service << 'SERVICEEOF'
+[Unit]
+Description=Voice Emotion Detector Streamlit App
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/voice_guard_rail
+Environment="PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/ec2-user/.local/bin/uv run streamlit run app_cloud.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF`,
 
       // Enable and start service
       'systemctl daemon-reload',
       'systemctl enable voice-emotion',
       'systemctl start voice-emotion',
 
-      // Install and configure nginx as reverse proxy (optional, for port 80)
-      'amazon-linux-extras install nginx1 -y || yum install nginx -y',
-      'cat > /etc/nginx/conf.d/voice-emotion.conf << \'EOF\'',
-      'server {',
-      '    listen 80;',
-      '    server_name _;',
-      '',
-      '    location / {',
-      '        proxy_pass http://localhost:8501;',
-      '        proxy_http_version 1.1;',
-      '        proxy_set_header Upgrade $http_upgrade;',
-      '        proxy_set_header Connection "upgrade";',
-      '        proxy_set_header Host $host;',
-      '        proxy_set_header X-Real-IP $remote_addr;',
-      '        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;',
-      '        proxy_set_header X-Forwarded-Proto $scheme;',
-      '        proxy_read_timeout 86400;',
-      '    }',
-      '}',
-      'EOF',
+      // Configure nginx as reverse proxy for port 80
+      `cat > /etc/nginx/conf.d/voice-emotion.conf << 'NGINXEOF'
+server {
+    listen 80;
+    server_name _;
+
+    location / {
+        proxy_pass http://localhost:8501;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 86400;
+    }
+}
+NGINXEOF`,
+      'rm -f /etc/nginx/conf.d/default.conf',
       'systemctl enable nginx',
       'systemctl start nginx',
     );
 
-    // Launch Template
-    const launchTemplate = new ec2.LaunchTemplate(this, 'VoiceEmotionLT', {
+    // EC2 Instance (on-demand for reliability)
+    const instance = new ec2.Instance(this, 'VoiceEmotionInstance', {
+      vpc,
       instanceType: new ec2.InstanceType(instanceTypeStr),
       machineImage: ec2.MachineImage.latestAmazonLinux2023(),
       securityGroup,
       role,
       userData,
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PUBLIC,
+      },
       blockDevices: [
         {
           deviceName: '/dev/xvda',
@@ -170,37 +147,16 @@ export class VoiceEmotionStack extends cdk.Stack {
           }),
         },
       ],
-      // Spot configuration - must use ONE_TIME for Auto Scaling Groups
-      ...(useSpot && {
-        spotOptions: {
-          requestType: ec2.SpotRequestType.ONE_TIME,
-          maxPrice: 0.05, // Max $0.05/hour (t3.medium spot is ~$0.01)
-        },
-      }),
     });
 
-    // Auto Scaling Group (single instance)
-    const asg = new autoscaling.AutoScalingGroup(this, 'VoiceEmotionASG', {
-      vpc,
-      launchTemplate,
-      minCapacity: 1,
-      maxCapacity: 1,
-      desiredCapacity: 1,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
-      healthCheck: autoscaling.HealthCheck.ec2({
-        grace: cdk.Duration.minutes(10), // Allow time for model download
-      }),
-    });
-
-    // Elastic IP for stable address
+    // Elastic IP associated with the instance
     const eip = new ec2.CfnEIP(this, 'VoiceEmotionEIP', {
       domain: 'vpc',
+      instanceId: instance.instanceId,
       tags: [{ key: 'Name', value: 'VoiceEmotionDetector' }],
     });
 
-    // Output only the app URL (no sensitive details exposed)
+    // Output only the app URL
     new cdk.CfnOutput(this, 'AppURL', {
       value: `http://${eip.attrPublicIp}`,
       description: 'Voice Emotion Detector URL',
@@ -209,6 +165,5 @@ export class VoiceEmotionStack extends cdk.Stack {
     // Tag all resources
     cdk.Tags.of(this).add('Project', 'VoiceEmotionDetector');
     cdk.Tags.of(this).add('Environment', 'Production');
-    cdk.Tags.of(this).add('CostCenter', 'Personal');
   }
 }
