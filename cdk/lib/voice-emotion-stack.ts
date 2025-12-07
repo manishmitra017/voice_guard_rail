@@ -2,6 +2,8 @@ import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import { Construct } from 'constructs';
 
 export interface VoiceEmotionStackProps extends cdk.StackProps {
@@ -194,53 +196,45 @@ export class VoiceEmotionStack extends cdk.Stack {
       }),
     });
 
-    // Elastic IP for stable address
+    // Elastic IP for stable address (used by CloudFront origin)
     const eip = new ec2.CfnEIP(this, 'VoiceEmotionEIP', {
       domain: 'vpc',
       tags: [{ key: 'Name', value: 'VoiceEmotionDetector' }],
     });
 
-    // Outputs
-    new cdk.CfnOutput(this, 'ElasticIP', {
-      value: eip.attrPublicIp,
-      description: 'Elastic IP - Associate this with your EC2 instance',
+    // CloudFront Distribution for HTTPS access
+    const distribution = new cloudfront.Distribution(this, 'VoiceEmotionCDN', {
+      defaultBehavior: {
+        origin: new origins.HttpOrigin(eip.attrPublicIp, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+          httpPort: 80,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+      },
+      // WebSocket support for Streamlit
+      additionalBehaviors: {
+        '/_stcore/*': {
+          origin: new origins.HttpOrigin(eip.attrPublicIp, {
+            protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+            httpPort: 80,
+          }),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        },
+      },
+      priceClass: cloudfront.PriceClass.PRICE_CLASS_100, // Cheapest - US, Canada, Europe
+      comment: 'Voice Emotion Detector CDN',
     });
 
+    // Only output the CloudFront URL (public-facing)
     new cdk.CfnOutput(this, 'AppURL', {
-      value: `http://${eip.attrPublicIp}`,
-      description: 'Application URL (after EIP association)',
-    });
-
-    new cdk.CfnOutput(this, 'StreamlitURL', {
-      value: `http://${eip.attrPublicIp}:8501`,
-      description: 'Direct Streamlit URL',
-    });
-
-    new cdk.CfnOutput(this, 'InstanceType', {
-      value: instanceTypeStr,
-      description: 'EC2 Instance Type',
-    });
-
-    new cdk.CfnOutput(this, 'SpotInstance', {
-      value: useSpot ? 'Yes (70% cost savings)' : 'No (On-Demand)',
-      description: 'Using Spot Instances',
-    });
-
-    new cdk.CfnOutput(this, 'EstimatedMonthlyCost', {
-      value: useSpot
-        ? instanceTypeStr === 't3.medium' ? '~$10-12/month' : '~$15-18/month'
-        : instanceTypeStr === 't3.medium' ? '~$30/month' : '~$60/month',
-      description: 'Estimated monthly cost',
-    });
-
-    new cdk.CfnOutput(this, 'SSHCommand', {
-      value: `ssh -i <your-key.pem> ec2-user@${eip.attrPublicIp}`,
-      description: 'SSH command to connect',
-    });
-
-    new cdk.CfnOutput(this, 'LogsCommand', {
-      value: 'sudo journalctl -u voice-emotion -f',
-      description: 'Command to view application logs',
+      value: `https://${distribution.distributionDomainName}`,
+      description: 'Voice Emotion Detector URL',
     });
 
     // Tag all resources
