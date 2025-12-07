@@ -154,13 +154,19 @@ This happens once and models are cached for future runs.
 
 ```
 voice_guard_rail/
-├── app.py                      # Streamlit web application
-├── start.sh                    # Quick start script
+├── app.py                      # Local Streamlit app (uses sounddevice)
+├── app_cloud.py                # Cloud Streamlit app (browser-based recording)
+├── start.sh                    # Quick start script (local)
+├── deploy.sh                   # AWS deployment script
+├── Dockerfile                  # Container image for deployment
 ├── pyproject.toml              # Python dependencies (uv)
 ├── README.md                   # This file
+├── cdk/                        # AWS CDK infrastructure
+│   ├── bin/app.ts              # CDK app entry point
+│   └── lib/voice-emotion-stack.ts  # EC2 Spot + networking
 └── src/
     ├── __init__.py
-    ├── audio_recorder.py       # Microphone recording (sounddevice)
+    ├── audio_recorder.py       # Microphone recording (local only)
     ├── emotion_classifier.py   # 7-emotion Whisper model
     └── speech_transcriber.py   # Whisper speech-to-text
 ```
@@ -238,9 +244,97 @@ uv run pytest
 uv run ruff check .
 ```
 
+## AWS Deployment
+
+Deploy to AWS EC2 Spot instances for **~$12-15/month**.
+
+### Prerequisites
+
+1. AWS CLI configured with credentials
+2. Node.js 18+ (for CDK)
+3. AWS CDK CLI: `npm install -g aws-cdk`
+
+### Quick Deploy
+
+```bash
+./deploy.sh
+```
+
+### Manual Deploy
+
+```bash
+# Navigate to CDK directory
+cd cdk
+
+# Install dependencies
+npm install
+
+# Deploy to AWS
+npm run deploy
+```
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                    AWS Cloud (~$12-15/month)              │
+├──────────────────────────────────────────────────────────┤
+│                                                           │
+│   ┌─────────────────┐         ┌────────────────────────┐ │
+│   │   Your Domain   │────────▶│   EC2 Spot t3.medium   │ │
+│   │  (optional)     │         │   - 4GB RAM + 4GB swap │ │
+│   └─────────────────┘         │   - nginx reverse proxy│ │
+│                               │   - Streamlit :8501    │ │
+│                               │   - Auto-restart       │ │
+│                               └────────────────────────┘ │
+│                                           │              │
+│                               ┌───────────▼────────────┐ │
+│                               │   ML Models (cached)   │ │
+│                               │   - Whisper base       │ │
+│                               │   - Emotion classifier │ │
+│                               └────────────────────────┘ │
+│                                                           │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Cost Breakdown
+
+| Resource | Monthly Cost |
+|----------|-------------|
+| EC2 Spot t3.medium | ~$10 |
+| EBS Storage (20GB) | ~$2 |
+| Data Transfer | ~$1 |
+| **Total** | **~$12-15** |
+
+### Cloud vs Local App
+
+| Feature | `app.py` (Local) | `app_cloud.py` (Cloud) |
+|---------|------------------|------------------------|
+| Audio Recording | Server microphone (sounddevice) | Browser microphone (WebRTC) |
+| Deployment | Local machine only | AWS, Docker, any cloud |
+| HTTPS Required | No | Yes (for microphone access) |
+
+### SSH Access
+
+```bash
+ssh -i <your-key.pem> ec2-user@<elastic-ip>
+
+# View logs
+sudo journalctl -u voice-emotion -f
+
+# Restart service
+sudo systemctl restart voice-emotion
+```
+
+### Destroy Stack
+
+```bash
+cd cdk && npm run destroy
+```
+
 ## Future Improvements
 
-- [ ] AWS deployment (EC2/ECS)
+- [x] AWS deployment (EC2 Spot)
 - [ ] Real-time streaming analysis
 - [ ] Emotion history tracking
 - [ ] Multiple language support

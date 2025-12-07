@@ -1,0 +1,22 @@
+#!/usr/bin/env node
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+require("source-map-support/register");
+const cdk = require("aws-cdk-lib");
+const voice_emotion_stack_1 = require("../lib/voice-emotion-stack");
+const app = new cdk.App();
+// Voice Emotion Detector Stack
+// Uses EC2 Spot instances for cost optimization (~$12-15/month)
+new voice_emotion_stack_1.VoiceEmotionStack(app, 'VoiceEmotionStack', {
+    env: {
+        account: process.env.CDK_DEFAULT_ACCOUNT,
+        region: process.env.CDK_DEFAULT_REGION || 'ap-southeast-2',
+    },
+    // Cost optimization settings
+    useSpotInstances: true, // 70% cheaper than on-demand
+    instanceType: 't3.medium', // 4GB RAM + 4GB swap = enough for models
+    // Stack description
+    description: 'Voice Emotion Detector - Real-time speech emotion recognition using AI',
+});
+app.synth();
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiYXBwLmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiYXBwLnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUNBLHVDQUFxQztBQUNyQyxtQ0FBbUM7QUFDbkMsb0VBQStEO0FBRS9ELE1BQU0sR0FBRyxHQUFHLElBQUksR0FBRyxDQUFDLEdBQUcsRUFBRSxDQUFDO0FBRTFCLCtCQUErQjtBQUMvQixnRUFBZ0U7QUFDaEUsSUFBSSx1Q0FBaUIsQ0FBQyxHQUFHLEVBQUUsbUJBQW1CLEVBQUU7SUFDOUMsR0FBRyxFQUFFO1FBQ0gsT0FBTyxFQUFFLE9BQU8sQ0FBQyxHQUFHLENBQUMsbUJBQW1CO1FBQ3hDLE1BQU0sRUFBRSxPQUFPLENBQUMsR0FBRyxDQUFDLGtCQUFrQixJQUFJLGdCQUFnQjtLQUMzRDtJQUVELDZCQUE2QjtJQUM3QixnQkFBZ0IsRUFBRSxJQUFJLEVBQU8sNkJBQTZCO0lBQzFELFlBQVksRUFBRSxXQUFXLEVBQUkseUNBQXlDO0lBRXRFLG9CQUFvQjtJQUNwQixXQUFXLEVBQUUsd0VBQXdFO0NBQ3RGLENBQUMsQ0FBQztBQUVILEdBQUcsQ0FBQyxLQUFLLEVBQUUsQ0FBQyIsInNvdXJjZXNDb250ZW50IjpbIiMhL3Vzci9iaW4vZW52IG5vZGVcbmltcG9ydCAnc291cmNlLW1hcC1zdXBwb3J0L3JlZ2lzdGVyJztcbmltcG9ydCAqIGFzIGNkayBmcm9tICdhd3MtY2RrLWxpYic7XG5pbXBvcnQgeyBWb2ljZUVtb3Rpb25TdGFjayB9IGZyb20gJy4uL2xpYi92b2ljZS1lbW90aW9uLXN0YWNrJztcblxuY29uc3QgYXBwID0gbmV3IGNkay5BcHAoKTtcblxuLy8gVm9pY2UgRW1vdGlvbiBEZXRlY3RvciBTdGFja1xuLy8gVXNlcyBFQzIgU3BvdCBpbnN0YW5jZXMgZm9yIGNvc3Qgb3B0aW1pemF0aW9uICh+JDEyLTE1L21vbnRoKVxubmV3IFZvaWNlRW1vdGlvblN0YWNrKGFwcCwgJ1ZvaWNlRW1vdGlvblN0YWNrJywge1xuICBlbnY6IHtcbiAgICBhY2NvdW50OiBwcm9jZXNzLmVudi5DREtfREVGQVVMVF9BQ0NPVU5ULFxuICAgIHJlZ2lvbjogcHJvY2Vzcy5lbnYuQ0RLX0RFRkFVTFRfUkVHSU9OIHx8ICdhcC1zb3V0aGVhc3QtMicsXG4gIH0sXG5cbiAgLy8gQ29zdCBvcHRpbWl6YXRpb24gc2V0dGluZ3NcbiAgdXNlU3BvdEluc3RhbmNlczogdHJ1ZSwgICAgICAvLyA3MCUgY2hlYXBlciB0aGFuIG9uLWRlbWFuZFxuICBpbnN0YW5jZVR5cGU6ICd0My5tZWRpdW0nLCAgIC8vIDRHQiBSQU0gKyA0R0Igc3dhcCA9IGVub3VnaCBmb3IgbW9kZWxzXG5cbiAgLy8gU3RhY2sgZGVzY3JpcHRpb25cbiAgZGVzY3JpcHRpb246ICdWb2ljZSBFbW90aW9uIERldGVjdG9yIC0gUmVhbC10aW1lIHNwZWVjaCBlbW90aW9uIHJlY29nbml0aW9uIHVzaW5nIEFJJyxcbn0pO1xuXG5hcHAuc3ludGgoKTtcbiJdfQ==

@@ -61,3 +61,17 @@ context_portal/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Node/CDK
+node_modules/
+cdk/node_modules/
+cdk/cdk.out/
+cdk/*.js
+cdk/*.d.ts
+cdk/bin/*.js
+cdk/bin/*.d.ts
+cdk/lib/*.js
+cdk/lib/*.d.ts
+
+# Test samples (large audio files)
+test_samples/

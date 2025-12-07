@@ -1,0 +1,452 @@
+{
+ "Description": "Voice Emotion Detector - Real-time speech emotion recognition using AI",
+ "Resources": {
+  "VoiceEmotionSGFBDCFD7B": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Voice Emotion Detector",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "SSH access",
+      "FromPort": 22,
+      "IpProtocol": "tcp",
+      "ToPort": 22
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "HTTP access",
+      "FromPort": 80,
+      "IpProtocol": "tcp",
+      "ToPort": 80
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "HTTPS access",
+      "FromPort": 443,
+      "IpProtocol": "tcp",
+      "ToPort": 443
+     },
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Streamlit access",
+      "FromPort": 8501,
+      "IpProtocol": "tcp",
+      "ToPort": 8501
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "CostCenter",
+      "Value": "Personal"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Project",
+      "Value": "VoiceEmotionDetector"
+     }
+    ],
+    "VpcId": "vpc-0a5e0942b3ffe85df"
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionSG/Resource"
+   }
+  },
+  "VoiceEmotionRole4F2498A4": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "ec2.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/AmazonSSMManagedInstanceCore"
+       ]
+      ]
+     }
+    ],
+    "Tags": [
+     {
+      "Key": "CostCenter",
+      "Value": "Personal"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Project",
+      "Value": "VoiceEmotionDetector"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionRole/Resource"
+   }
+  },
+  "VoiceEmotionLTProfileAF6F9F81": {
+   "Type": "AWS::IAM::InstanceProfile",
+   "Properties": {
+    "Roles": [
+     {
+      "Ref": "VoiceEmotionRole4F2498A4"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionLT/Profile"
+   }
+  },
+  "VoiceEmotionLT3311603A": {
+   "Type": "AWS::EC2::LaunchTemplate",
+   "Properties": {
+    "LaunchTemplateData": {
+     "BlockDeviceMappings": [
+      {
+       "DeviceName": "/dev/xvda",
+       "Ebs": {
+        "Encrypted": true,
+        "VolumeSize": 20,
+        "VolumeType": "gp3"
+       }
+      }
+     ],
+     "IamInstanceProfile": {
+      "Arn": {
+       "Fn::GetAtt": [
+        "VoiceEmotionLTProfileAF6F9F81",
+        "Arn"
+       ]
+      }
+     },
+     "ImageId": {
+      "Ref": "SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter"
+     },
+     "InstanceMarketOptions": {
+      "MarketType": "spot",
+      "SpotOptions": {
+       "InstanceInterruptionBehavior": "stop",
+       "MaxPrice": "0.05",
+       "SpotInstanceType": "persistent"
+      }
+     },
+     "InstanceType": "t3.medium",
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "VoiceEmotionSGFBDCFD7B",
+        "GroupId"
+       ]
+      }
+     ],
+     "TagSpecifications": [
+      {
+       "ResourceType": "instance",
+       "Tags": [
+        {
+         "Key": "CostCenter",
+         "Value": "Personal"
+        },
+        {
+         "Key": "Environment",
+         "Value": "Production"
+        },
+        {
+         "Key": "Name",
+         "Value": "VoiceEmotionStack/VoiceEmotionLT"
+        },
+        {
+         "Key": "Project",
+         "Value": "VoiceEmotionDetector"
+        }
+       ]
+      },
+      {
+       "ResourceType": "volume",
+       "Tags": [
+        {
+         "Key": "CostCenter",
+         "Value": "Personal"
+        },
+        {
+         "Key": "Environment",
+         "Value": "Production"
+        },
+        {
+         "Key": "Name",
+         "Value": "VoiceEmotionStack/VoiceEmotionLT"
+        },
+        {
+         "Key": "Project",
+         "Value": "VoiceEmotionDetector"
+        }
+       ]
+      }
+     ],
+     "UserData": {
+      "Fn::Base64": "#!/bin/bash\n#!/bin/bash\nset -e\nyum update -y\nyum install -y git docker python3.11 python3.11-pip\ncurl -LsSf https://astral.sh/uv/install.sh | sh\nexport PATH=\"$HOME/.local/bin:$PATH\"\necho 'export PATH=\"$HOME/.local/bin:$PATH\"' >> /etc/profile.d/uv.sh\ndd if=/dev/zero of=/swapfile bs=1M count=4096\nchmod 600 /swapfile\nmkswap /swapfile\nswapon /swapfile\necho \"/swapfile swap swap defaults 0 0\" >> /etc/fstab\ncd /home/ec2-user\ngit clone https://github.com/manishmitra017/voice_guard_rail.git\ncd voice_guard_rail\nchown -R ec2-user:ec2-user /home/ec2-user/voice_guard_rail\nsudo -u ec2-user /root/.local/bin/uv sync\ncat > /etc/systemd/system/voice-emotion.service << 'EOF'\n[Unit]\nDescription=Voice Emotion Detector Streamlit App\nAfter=network.target\n\n[Service]\nType=simple\nUser=ec2-user\nWorkingDirectory=/home/ec2-user/voice_guard_rail\nEnvironment=\"PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin\"\nExecStart=/home/ec2-user/.local/bin/uv run streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\nEOF\nsystemctl daemon-reload\nsystemctl enable voice-emotion\nsystemctl start voice-emotion\namazon-linux-extras install nginx1 -y || yum install nginx -y\ncat > /etc/nginx/conf.d/voice-emotion.conf << 'EOF'\nserver {\n    listen 80;\n    server_name _;\n\n    location / {\n        proxy_pass http://localhost:8501;\n        proxy_http_version 1.1;\n        proxy_set_header Upgrade $http_upgrade;\n        proxy_set_header Connection \"upgrade\";\n        proxy_set_header Host $host;\n        proxy_set_header X-Real-IP $remote_addr;\n        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n        proxy_set_header X-Forwarded-Proto $scheme;\n        proxy_read_timeout 86400;\n    }\n}\nEOF\nsystemctl enable nginx\nsystemctl start nginx"
+     }
+    },
+    "TagSpecifications": [
+     {
+      "ResourceType": "launch-template",
+      "Tags": [
+       {
+        "Key": "CostCenter",
+        "Value": "Personal"
+       },
+       {
+        "Key": "Environment",
+        "Value": "Production"
+       },
+       {
+        "Key": "Name",
+        "Value": "VoiceEmotionStack/VoiceEmotionLT"
+       },
+       {
+        "Key": "Project",
+        "Value": "VoiceEmotionDetector"
+       }
+      ]
+     }
+    ]
+   },
+   "DependsOn": [
+    "VoiceEmotionRole4F2498A4"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionLT/Resource"
+   }
+  },
+  "VoiceEmotionASG00BA22FD": {
+   "Type": "AWS::AutoScaling::AutoScalingGroup",
+   "Properties": {
+    "DesiredCapacity": "1",
+    "HealthCheckGracePeriod": 600,
+    "HealthCheckType": "EC2",
+    "LaunchTemplate": {
+     "LaunchTemplateId": {
+      "Ref": "VoiceEmotionLT3311603A"
+     },
+     "Version": {
+      "Fn::GetAtt": [
+       "VoiceEmotionLT3311603A",
+       "LatestVersionNumber"
+      ]
+     }
+    },
+    "MaxSize": "1",
+    "MinSize": "1",
+    "Tags": [
+     {
+      "Key": "CostCenter",
+      "PropagateAtLaunch": true,
+      "Value": "Personal"
+     },
+     {
+      "Key": "Environment",
+      "PropagateAtLaunch": true,
+      "Value": "Production"
+     },
+     {
+      "Key": "Project",
+      "PropagateAtLaunch": true,
+      "Value": "VoiceEmotionDetector"
+     }
+    ],
+    "VPCZoneIdentifier": [
+     "subnet-05c6b2b51e1a3beea",
+     "subnet-0482e0374b7e32230",
+     "subnet-080d6e84408470cdf"
+    ]
+   },
+   "UpdatePolicy": {
+    "AutoScalingScheduledAction": {
+     "IgnoreUnmodifiedGroupSizeProperties": true
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionASG/ASG"
+   }
+  },
+  "VoiceEmotionEIP": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "CostCenter",
+      "Value": "Personal"
+     },
+     {
+      "Key": "Environment",
+      "Value": "Production"
+     },
+     {
+      "Key": "Name",
+      "Value": "VoiceEmotionDetector"
+     },
+     {
+      "Key": "Project",
+      "Value": "VoiceEmotionDetector"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/VoiceEmotionEIP"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2XN0YrCMBAF0G/xPR1p9AdEZBEWLO2+yxjH3dg0KcnMyhLy70sVBfXpcs99uBr0QkM9w0uqzLGvnD1A7hhNr1pKQaIhhZe0z2Q05I6MRMt/HzHIqNYn/wyfKN78fNEwOmSa9nfZbJuiLA6Q2+Cucs+tT4zeUBPDyToqCoVDMuis/4a8Eg7drTzeX62USRuMOBBTnMpOeBQuyocjwTnNf/US6hrq2TlZW0XxbAeC9pb/cOezCw0BAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "VoiceEmotionStack/CDKMetadata/Default"
+   }
+  }
+ },
+ "Parameters": {
+  "SsmParameterValueawsserviceamiamazonlinuxlatestal2023amikernel61x8664C96584B6F00A464EAD1953AFF4B05118Parameter": {
+   "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+   "Default": "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64"
+  },
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Outputs": {
+  "ElasticIP": {
+   "Description": "Elastic IP - Associate this with your EC2 instance",
+   "Value": {
+    "Fn::GetAtt": [
+     "VoiceEmotionEIP",
+     "PublicIp"
+    ]
+   }
+  },
+  "AppURL": {
+   "Description": "Application URL (after EIP association)",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "http://",
+      {
+       "Fn::GetAtt": [
+        "VoiceEmotionEIP",
+        "PublicIp"
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  "StreamlitURL": {
+   "Description": "Direct Streamlit URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "http://",
+      {
+       "Fn::GetAtt": [
+        "VoiceEmotionEIP",
+        "PublicIp"
+       ]
+      },
+      ":8501"
+     ]
+    ]
+   }
+  },
+  "InstanceType": {
+   "Description": "EC2 Instance Type",
+   "Value": "t3.medium"
+  },
+  "SpotInstance": {
+   "Description": "Using Spot Instances",
+   "Value": "Yes (70% cost savings)"
+  },
+  "EstimatedMonthlyCost": {
+   "Description": "Estimated monthly cost",
+   "Value": "~$10-12/month"
+  },
+  "SSHCommand": {
+   "Description": "SSH command to connect",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "ssh -i <your-key.pem> ec2-user@",
+      {
+       "Fn::GetAtt": [
+        "VoiceEmotionEIP",
+        "PublicIp"
+       ]
+      }
+     ]
+    ]
+   }
+  },
+  "LogsCommand": {
+   "Description": "Command to view application logs",
+   "Value": "sudo journalctl -u voice-emotion -f"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

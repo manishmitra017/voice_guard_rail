@@ -1,0 +1,21 @@
+{
+  "version": "48.0.0",
+  "files": {
+    "20052c865242cb7db9c15d38e1b16475317174a3e90f9fbc39a113d669423206": {
+      "displayName": "VoiceEmotionStack Template",
+      "source": {
+        "path": "VoiceEmotionStack.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "066043264852-ap-southeast-2-67b49e68": {
+          "bucketName": "cdk-hnb659fds-assets-066043264852-ap-southeast-2",
+          "objectKey": "20052c865242cb7db9c15d38e1b16475317174a3e90f9fbc39a113d669423206.json",
+          "region": "ap-southeast-2",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::066043264852:role/cdk-hnb659fds-file-publishing-role-066043264852-ap-southeast-2"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}
