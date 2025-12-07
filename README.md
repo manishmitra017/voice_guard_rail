@@ -248,19 +248,49 @@ uv run ruff check .
 
 Deploy to AWS EC2 Spot instances for **~$12-15/month**.
 
-### Prerequisites
+### Option 1: Deploy from GitHub Actions (Recommended)
+
+1. **Fork this repository** or push to your own GitHub repo
+
+2. **Add GitHub Secrets** (Settings → Secrets and variables → Actions):
+   - `AWS_ACCESS_KEY_ID` - Your AWS access key
+   - `AWS_SECRET_ACCESS_KEY` - Your AWS secret key
+   - `AWS_ACCOUNT_ID` - Your AWS account ID (12 digits)
+
+3. **Push to main branch** - Deployment runs automatically!
+
+   Or trigger manually: Actions → Deploy to AWS → Run workflow
+
+### Option 2: Deploy Locally
+
+#### Prerequisites
 
 1. AWS CLI configured with credentials
 2. Node.js 18+ (for CDK)
 3. AWS CDK CLI: `npm install -g aws-cdk`
 
-### Quick Deploy
+#### Using .env file
 
 ```bash
+# Copy the example and fill in your credentials
+cp .env.example .env
+# Edit .env with your AWS credentials
+
+# Deploy
 ./deploy.sh
 ```
 
-### Manual Deploy
+#### Using AWS CLI credentials
+
+```bash
+# Configure AWS CLI
+aws configure
+
+# Deploy
+./deploy.sh
+```
+
+#### Manual Deploy
 
 ```bash
 # Navigate to CDK directory

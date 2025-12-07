@@ -8,10 +8,21 @@ echo "=========================================="
 echo "Voice Emotion Detector - AWS Deployment"
 echo "=========================================="
 
+# Load .env file if it exists
+if [ -f "$(dirname "$0")/.env" ]; then
+    echo "📄 Loading credentials from .env file..."
+    set -a
+    source "$(dirname "$0")/.env"
+    set +a
+fi
+
 # Check for AWS credentials
 if ! aws sts get-caller-identity &> /dev/null; then
     echo "❌ AWS credentials not configured!"
-    echo "Please run: aws configure"
+    echo ""
+    echo "Option 1: Create .env file (copy from .env.example)"
+    echo "Option 2: Run: aws configure"
+    echo "Option 3: Set environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY"
     exit 1
 fi
 
