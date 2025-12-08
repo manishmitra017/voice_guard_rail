@@ -13,16 +13,42 @@ interface EmotionResult {
 interface TranscriptionResult {
   text: string
   language: string
+  language_name?: string
+}
+
+interface TranslationItem {
+  language_code: string
+  language_name: string
+  flag: string
+  text: string
 }
 
 interface AnalyzeResponse {
   transcription: TranscriptionResult
   emotion: EmotionResult
+  audio_events?: string[]
+  translations?: TranslationItem[]
+}
+
+interface LanguageInfo {
+  code: string
+  name: string
+  flag: string
+}
+
+interface HealthInfo {
+  status: string
+  models_loaded: boolean
+  sensevoice_enabled: boolean
+  translation_enabled: boolean
 }
 
 type RecordingState = 'idle' | 'recording' | 'processing'
 
 const API_BASE = '/api'
+
+// Popular languages for quick selection
+const POPULAR_LANGUAGES = ['es', 'fr', 'de', 'zh', 'ja', 'ko', 'pt', 'it', 'ru', 'ar', 'hi']
 
 // Convert audio blob to WAV format
 async function convertToWav(audioBlob: Blob, sampleRate: number = 16000): Promise<Blob> {
@@ -30,10 +56,8 @@ async function convertToWav(audioBlob: Blob, sampleRate: number = 16000): Promis
   const arrayBuffer = await audioBlob.arrayBuffer()
   const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
 
-  // Get audio data (mono)
   const channelData = audioBuffer.getChannelData(0)
 
-  // Resample if needed
   let samples: Float32Array
   if (audioBuffer.sampleRate !== sampleRate) {
     const ratio = audioBuffer.sampleRate / sampleRate
@@ -46,18 +70,15 @@ async function convertToWav(audioBlob: Blob, sampleRate: number = 16000): Promis
     samples = channelData
   }
 
-  // Convert to 16-bit PCM
   const pcmData = new Int16Array(samples.length)
   for (let i = 0; i < samples.length; i++) {
     const s = Math.max(-1, Math.min(1, samples[i]))
     pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
   }
 
-  // Create WAV file
   const wavBuffer = new ArrayBuffer(44 + pcmData.length * 2)
   const view = new DataView(wavBuffer)
 
-  // WAV header
   const writeString = (offset: number, str: string) => {
     for (let i = 0; i < str.length; i++) {
       view.setUint8(offset + i, str.charCodeAt(i))
@@ -68,17 +89,16 @@ async function convertToWav(audioBlob: Blob, sampleRate: number = 16000): Promis
   view.setUint32(4, 36 + pcmData.length * 2, true)
   writeString(8, 'WAVE')
   writeString(12, 'fmt ')
-  view.setUint32(16, 16, true) // Subchunk1Size
-  view.setUint16(20, 1, true) // AudioFormat (PCM)
-  view.setUint16(22, 1, true) // NumChannels (mono)
-  view.setUint32(24, sampleRate, true) // SampleRate
-  view.setUint32(28, sampleRate * 2, true) // ByteRate
-  view.setUint16(32, 2, true) // BlockAlign
-  view.setUint16(34, 16, true) // BitsPerSample
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
   writeString(36, 'data')
   view.setUint32(40, pcmData.length * 2, true)
 
-  // Write PCM data
   const pcmOffset = 44
   for (let i = 0; i < pcmData.length; i++) {
     view.setInt16(pcmOffset + i * 2, pcmData[i], true)
@@ -92,17 +112,29 @@ function App() {
   const [state, setState] = useState<RecordingState>('idle')
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isServerReady, setIsServerReady] = useState<boolean | null>(null)
+  const [healthInfo, setHealthInfo] = useState<HealthInfo | null>(null)
+
+  // Translation state
+  const [availableLanguages, setAvailableLanguages] = useState<LanguageInfo[]>([])
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['es', 'fr'])
+  const [showLanguageSelector, setShowLanguageSelector] = useState(false)
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
-  // Check server health on mount
+  // Fetch health and languages on mount
   useEffect(() => {
+    // Check health
     fetch(`${API_BASE}/health`)
       .then(res => res.json())
-      .then(data => setIsServerReady(data.models_loaded))
-      .catch(() => setIsServerReady(false))
+      .then((data: HealthInfo) => setHealthInfo(data))
+      .catch(() => setHealthInfo({ status: 'error', models_loaded: false, sensevoice_enabled: false, translation_enabled: false }))
+
+    // Fetch available languages
+    fetch(`${API_BASE}/languages`)
+      .then(res => res.json())
+      .then((data: LanguageInfo[]) => setAvailableLanguages(data))
+      .catch(() => {})
   }, [])
 
   const startRecording = useCallback(async () => {
@@ -119,14 +151,12 @@ function App() {
         }
       })
 
-      // Try to use WAV if supported, otherwise use webm
       let mimeType = 'audio/webm;codecs=opus'
       if (MediaRecorder.isTypeSupported('audio/wav')) {
         mimeType = 'audio/wav'
       }
 
       const mediaRecorder = new MediaRecorder(stream, { mimeType })
-
       chunksRef.current = []
 
       mediaRecorder.ondataavailable = (event) => {
@@ -136,13 +166,9 @@ function App() {
       }
 
       mediaRecorder.onstop = async () => {
-        // Stop all tracks
         stream.getTracks().forEach(track => track.stop())
-
-        // Create blob from chunks
         const audioBlob = new Blob(chunksRef.current, { type: mimeType })
 
-        // Convert to WAV for backend compatibility
         setState('processing')
         try {
           const wavBlob = await convertToWav(audioBlob)
@@ -175,7 +201,13 @@ function App() {
       const formData = new FormData()
       formData.append('audio', audioBlob, 'recording.wav')
 
-      const response = await fetch(`${API_BASE}/analyze`, {
+      // Build URL with translation params
+      let url = `${API_BASE}/analyze?language=auto`
+      if (selectedLanguages.length > 0 && healthInfo?.translation_enabled) {
+        url += `&translate_to=${selectedLanguages.join(',')}`
+      }
+
+      const response = await fetch(url, {
         method: 'POST',
         body: formData
       })
@@ -195,6 +227,18 @@ function App() {
     }
   }
 
+  const toggleLanguage = (code: string) => {
+    setSelectedLanguages(prev => {
+      if (prev.includes(code)) {
+        return prev.filter(l => l !== code)
+      }
+      if (prev.length >= 5) {
+        return prev // Max 5 languages
+      }
+      return [...prev, code]
+    })
+  }
+
   const getButtonText = () => {
     switch (state) {
       case 'recording': return 'Stop Recording'
@@ -211,16 +255,83 @@ function App() {
     }
   }
 
+  const getLanguageFlag = (code: string): string => {
+    const lang = availableLanguages.find(l => l.code === code)
+    return lang?.flag || '🏳️'
+  }
+
+  const getLanguageName = (code: string): string => {
+    const lang = availableLanguages.find(l => l.code === code)
+    return lang?.name || code
+  }
+
   return (
     <div className="container">
       <header>
         <h1>Voice Emotion Detector</h1>
-        <p className="subtitle">Real-time speech emotion recognition using AI</p>
+        <p className="subtitle">
+          Real-time speech emotion recognition with multilingual translation
+        </p>
+        {healthInfo?.sensevoice_enabled && (
+          <span className="feature-badge sensevoice">SenseVoice</span>
+        )}
+        {healthInfo?.translation_enabled && (
+          <span className="feature-badge translation">Translation</span>
+        )}
       </header>
 
-      {isServerReady === false && (
-        <div className="status-banner error">
+      {healthInfo && !healthInfo.models_loaded && (
+        <div className="status-banner loading">
           Server is loading models... Please wait.
+        </div>
+      )}
+
+      {/* Language Selection */}
+      {healthInfo?.translation_enabled && (
+        <div className="language-section">
+          <div className="language-header">
+            <span>Translate to:</span>
+            <button
+              className="language-toggle"
+              onClick={() => setShowLanguageSelector(!showLanguageSelector)}
+            >
+              {showLanguageSelector ? 'Done' : 'Edit'}
+            </button>
+          </div>
+
+          <div className="selected-languages">
+            {selectedLanguages.map(code => (
+              <span key={code} className="language-chip" onClick={() => toggleLanguage(code)}>
+                {getLanguageFlag(code)} {getLanguageName(code)}
+                <span className="remove">×</span>
+              </span>
+            ))}
+            {selectedLanguages.length === 0 && (
+              <span className="no-languages">No languages selected</span>
+            )}
+          </div>
+
+          {showLanguageSelector && (
+            <div className="language-selector">
+              <div className="language-grid">
+                {availableLanguages
+                  .filter(lang => POPULAR_LANGUAGES.includes(lang.code) || selectedLanguages.includes(lang.code))
+                  .map(lang => (
+                    <button
+                      key={lang.code}
+                      className={`language-option ${selectedLanguages.includes(lang.code) ? 'selected' : ''}`}
+                      onClick={() => toggleLanguage(lang.code)}
+                    >
+                      <span className="flag">{lang.flag}</span>
+                      <span className="name">{lang.name}</span>
+                    </button>
+                  ))}
+              </div>
+              {selectedLanguages.length >= 5 && (
+                <p className="language-limit">Maximum 5 languages</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -228,7 +339,7 @@ function App() {
         <button
           className={`record-button ${state}`}
           onClick={handleButtonClick}
-          disabled={state === 'processing' || isServerReady === false}
+          disabled={state === 'processing' || !healthInfo?.models_loaded}
         >
           <span className="button-icon">
             {state === 'recording' ? '⬛' : state === 'processing' ? '⏳' : '🎤'}
@@ -252,14 +363,43 @@ function App() {
 
       {result && (
         <div className="results">
+          {/* Original Transcription */}
           <div className="result-card transcription">
             <h3>What You Said</h3>
             <p className="transcription-text">
               {result.transcription.text || '(No speech detected)'}
             </p>
-            <span className="language-badge">{result.transcription.language}</span>
+            <div className="transcription-meta">
+              <span className="language-badge">
+                {getLanguageFlag(result.transcription.language)} {result.transcription.language_name || result.transcription.language}
+              </span>
+              {result.audio_events && result.audio_events.length > 0 && (
+                <span className="audio-events">
+                  Detected: {result.audio_events.join(', ')}
+                </span>
+              )}
+            </div>
           </div>
 
+          {/* Translations */}
+          {result.translations && result.translations.length > 0 && (
+            <div className="result-card translations">
+              <h3>Translations</h3>
+              <div className="translations-list">
+                {result.translations.map(translation => (
+                  <div key={translation.language_code} className="translation-item">
+                    <div className="translation-header">
+                      <span className="translation-flag">{translation.flag}</span>
+                      <span className="translation-lang">{translation.language_name}</span>
+                    </div>
+                    <p className="translation-text">{translation.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Emotion Result */}
           <div className="result-card emotion" style={{ borderColor: result.emotion.color }}>
             <h3>Detected Emotion</h3>
             <div className="emotion-display">
@@ -280,6 +420,7 @@ function App() {
             </div>
           </div>
 
+          {/* All Emotions */}
           <div className="result-card probabilities">
             <h3>All Emotions</h3>
             <div className="probability-list">
@@ -303,7 +444,10 @@ function App() {
       )}
 
       <footer>
-        <p>Powered by OpenAI Whisper & HuggingFace Transformers</p>
+        <p>
+          Powered by {healthInfo?.sensevoice_enabled ? 'SenseVoice' : 'OpenAI Whisper'} & HuggingFace
+          {healthInfo?.translation_enabled && ' + NLLB Translation'}
+        </p>
       </footer>
     </div>
   )

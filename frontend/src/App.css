@@ -21,6 +21,31 @@ header h1 {
 .subtitle {
   color: #8892b0;
   font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+/* Feature badges */
+.feature-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.feature-badge.sensevoice {
+  background: rgba(81, 207, 102, 0.2);
+  color: #51cf66;
+  border: 1px solid rgba(81, 207, 102, 0.3);
+}
+
+.feature-badge.translation {
+  background: rgba(102, 126, 234, 0.2);
+  color: #667eea;
+  border: 1px solid rgba(102, 126, 234, 0.3);
 }
 
 .status-banner {
@@ -36,6 +61,141 @@ header h1 {
   color: #ff6b6b;
 }
 
+.status-banner.loading {
+  background: rgba(255, 212, 59, 0.2);
+  border: 1px solid rgba(255, 212, 59, 0.4);
+  color: #ffd43b;
+}
+
+/* Language Selection Section */
+.language-section {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.language-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.language-header span {
+  color: #8892b0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.language-toggle {
+  background: transparent;
+  border: 1px solid rgba(102, 126, 234, 0.5);
+  color: #667eea;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.language-toggle:hover {
+  background: rgba(102, 126, 234, 0.2);
+}
+
+.selected-languages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.language-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(102, 126, 234, 0.2);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  color: #ccd6f6;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.language-chip:hover {
+  background: rgba(255, 107, 107, 0.2);
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.language-chip .remove {
+  font-size: 1rem;
+  color: #8892b0;
+  margin-left: 4px;
+}
+
+.no-languages {
+  color: #4a5568;
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.language-selector {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.language-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.language-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #ccd6f6;
+  font-size: 0.85rem;
+}
+
+.language-option:hover {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.3);
+}
+
+.language-option.selected {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: #667eea;
+}
+
+.language-option .flag {
+  font-size: 1.2rem;
+}
+
+.language-option .name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.language-limit {
+  margin-top: 12px;
+  color: #ffd43b;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+/* Recording Section */
 .recording-section {
   margin-bottom: 30px;
 }
@@ -128,6 +288,7 @@ header h1 {
   margin-bottom: 20px;
 }
 
+/* Results Section */
 .results {
   display: flex;
   flex-direction: column;
@@ -156,9 +317,16 @@ header h1 {
   color: #e6f1ff;
 }
 
+.transcription-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+
 .language-badge {
   display: inline-block;
-  margin-top: 12px;
   padding: 4px 10px;
   background: rgba(102, 126, 234, 0.2);
   border-radius: 20px;
@@ -167,6 +335,53 @@ header h1 {
   text-transform: uppercase;
 }
 
+.audio-events {
+  font-size: 0.8rem;
+  color: #51cf66;
+  background: rgba(81, 207, 102, 0.15);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+/* Translations */
+.translations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.translation-item {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+}
+
+.translation-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.translation-flag {
+  font-size: 1.2rem;
+}
+
+.translation-lang {
+  font-size: 0.85rem;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.translation-text {
+  color: #ccd6f6;
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Emotion Display */
 .emotion {
   border-width: 2px;
 }
@@ -210,6 +425,7 @@ header h1 {
   color: #8892b0;
 }
 
+/* Probability List */
 .probability-list {
   display: flex;
   flex-direction: column;
@@ -271,5 +487,13 @@ footer {
 
   .emotion-label {
     font-size: 1.5rem;
+  }
+
+  .language-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .probability-item {
+    grid-template-columns: 80px 1fr 50px;
   }
 }
