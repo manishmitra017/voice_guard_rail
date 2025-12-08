@@ -9,10 +9,10 @@ const app = new cdk.App();
 new VoiceEmotionStack(app, 'VoiceEmotionStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'ap-southeast-2',
+    region: process.env.CDK_DEFAULT_REGION || 'ap-south-1', // Mumbai - cheaper Spot instances
   },
   instanceType: 't3.medium',     // 4GB RAM + 4GB swap = enough for models
-  useSpotInstances: false,       // Set to true for ~70% savings, but requires instance recreation
+  useSpotInstances: true,        // ~70% cheaper (~$12/month vs $30/month)
   description: 'Voice Emotion Detector - Real-time speech emotion recognition using AI',
 });
 

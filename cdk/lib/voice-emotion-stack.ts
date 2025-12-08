@@ -56,6 +56,11 @@ export class VoiceEmotionStack extends cdk.Stack {
       ],
     });
 
+    // Instance Profile for the role
+    const instanceProfile = new iam.CfnInstanceProfile(this, 'VoiceEmotionProfile', {
+      roles: [role.roleName],
+    });
+
     // User data script to set up the application
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
@@ -134,48 +139,83 @@ NGINXEOF`,
       'systemctl start nginx',
     );
 
-    // Use L2 Instance construct - more reliable than CfnInstance with LaunchTemplate
-    // For Spot instances, we use LaunchTemplate approach with proper lifecycle
-    const instance = new ec2.Instance(this, 'VoiceEmotionInstance', {
-      vpc,
-      instanceType: new ec2.InstanceType(instanceTypeStr),
-      machineImage: ec2.MachineImage.latestAmazonLinux2023(),
-      securityGroup,
-      role,
-      userData,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      blockDevices: [
-        {
-          deviceName: '/dev/xvda',
-          volume: ec2.BlockDeviceVolume.ebs(20, {
-            volumeType: ec2.EbsDeviceVolumeType.GP3,
-            encrypted: true,
-          }),
+    // Get latest Amazon Linux 2023 AMI
+    const ami = ec2.MachineImage.latestAmazonLinux2023();
+    const amiId = ami.getImage(this).imageId;
+
+    // Create Launch Template with Spot configuration
+    const launchTemplate = new ec2.CfnLaunchTemplate(this, 'VoiceEmotionLT', {
+      launchTemplateData: {
+        instanceType: instanceTypeStr,
+        imageId: amiId,
+        iamInstanceProfile: {
+          arn: instanceProfile.attrArn,
         },
-      ],
+        securityGroupIds: [securityGroup.securityGroupId],
+        blockDeviceMappings: [
+          {
+            deviceName: '/dev/xvda',
+            ebs: {
+              volumeSize: 20,
+              volumeType: 'gp3',
+              encrypted: true,
+              deleteOnTermination: true,
+            },
+          },
+        ],
+        userData: cdk.Fn.base64(userData.render()),
+        // Spot configuration
+        ...(useSpot && {
+          instanceMarketOptions: {
+            marketType: 'spot',
+            spotOptions: {
+              maxPrice: '0.05',
+              spotInstanceType: 'one-time',
+            },
+          },
+        }),
+        tagSpecifications: [
+          {
+            resourceType: 'instance',
+            tags: [
+              { key: 'Name', value: 'VoiceEmotionDetector' },
+              { key: 'Project', value: 'VoiceEmotionDetector' },
+            ],
+          },
+        ],
+      },
     });
 
-    // Apply Spot configuration via escape hatch if requested
-    // Using one-time Spot request - simpler and more reliable
-    if (useSpot) {
-      const cfnInstance = instance.node.defaultChild as ec2.CfnInstance;
-      cfnInstance.addPropertyOverride('InstanceMarketOptions', {
-        MarketType: 'spot',
-        SpotOptions: {
-          MaxPrice: '0.05', // Max $0.05/hour (t3.medium spot is ~$0.02)
-        },
-      });
-    }
+    // Ensure launch template is created after instance profile
+    launchTemplate.addDependency(instanceProfile);
+
+    // Try different AZs for Spot capacity - prefer cheapest AZ
+    // Fall back to other subnets if first fails
+    const preferredSubnet = vpc.publicSubnets.find(s =>
+      s.availabilityZone.endsWith('a') // Usually has best Spot availability
+    ) || vpc.publicSubnets[0];
+
+    // Create EC2 instance using Launch Template
+    const instance = new ec2.CfnInstance(this, 'VoiceEmotionInstance', {
+      launchTemplate: {
+        launchTemplateId: launchTemplate.ref,
+        version: launchTemplate.attrLatestVersionNumber,
+      },
+      subnetId: preferredSubnet.subnetId,
+    });
+
+    // Ensure instance is created after launch template
+    instance.addDependency(launchTemplate);
 
     // Elastic IP for stable address
     const eip = new ec2.CfnEIP(this, 'VoiceEmotionEIP', {
       domain: 'vpc',
-      instanceId: instance.instanceId,
+      instanceId: instance.ref,
       tags: [{ key: 'Name', value: 'VoiceEmotionDetector' }],
     });
 
     // Ensure EIP is created after instance
-    eip.addDependency(instance.node.defaultChild as cdk.CfnResource);
+    eip.addDependency(instance);
 
     // Output only the app URL
     new cdk.CfnOutput(this, 'AppURL', {
