@@ -36,16 +36,11 @@ export class VoiceEmotionStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // Allow HTTP and Streamlit port
+    // Allow HTTP access
     securityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'HTTP access'
-    );
-    securityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(8501),
-      'Streamlit access'
     );
 
     // IAM Role for EC2
@@ -61,16 +56,21 @@ export class VoiceEmotionStack extends cdk.Stack {
       roles: [role.roleName],
     });
 
-    // User data script to set up the application
+    // User data script - React + FastAPI setup
     const userData = ec2.UserData.forLinux();
     userData.addCommands(
       '#!/bin/bash',
       'set -e',
       'exec > >(tee /var/log/user-data.log) 2>&1',
+      'echo "Starting setup at $(date)"',
 
       // Update system
       'yum update -y',
       'yum install -y git python3.11 python3.11-pip nginx',
+
+      // Install Node.js 20 for React build
+      'curl -fsSL https://rpm.nodesource.com/setup_20.x | bash -',
+      'yum install -y nodejs',
 
       // Install uv for ec2-user
       'sudo -u ec2-user bash -c "curl -LsSf https://astral.sh/uv/install.sh | sh"',
@@ -87,14 +87,23 @@ export class VoiceEmotionStack extends cdk.Stack {
       'git clone https://github.com/manishmitra017/voice_guard_rail.git',
       'chown -R ec2-user:ec2-user /home/ec2-user/voice_guard_rail',
 
-      // Install dependencies with uv as ec2-user
+      // Install Python dependencies with uv
       'cd /home/ec2-user/voice_guard_rail',
       'sudo -u ec2-user /home/ec2-user/.local/bin/uv sync',
 
-      // Create systemd service
-      `cat > /etc/systemd/system/voice-emotion.service << 'SERVICEEOF'
+      // Build React frontend
+      'cd /home/ec2-user/voice_guard_rail/frontend',
+      'npm install',
+      'npm run build',
+
+      // Copy built frontend to nginx directory
+      'mkdir -p /var/www/voice-emotion',
+      'cp -r /home/ec2-user/voice_guard_rail/frontend/dist/* /var/www/voice-emotion/',
+
+      // Create FastAPI systemd service
+      `cat > /etc/systemd/system/voice-emotion-api.service << 'SERVICEEOF'
 [Unit]
-Description=Voice Emotion Detector Streamlit App
+Description=Voice Emotion Detector FastAPI
 After=network.target
 
 [Service]
@@ -102,7 +111,7 @@ Type=simple
 User=ec2-user
 WorkingDirectory=/home/ec2-user/voice_guard_rail
 Environment="PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/ec2-user/.local/bin/uv run streamlit run app_cloud.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
+ExecStart=/home/ec2-user/.local/bin/uv run uvicorn api.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
 
@@ -110,33 +119,56 @@ RestartSec=10
 WantedBy=multi-user.target
 SERVICEEOF`,
 
-      // Enable and start service
-      'systemctl daemon-reload',
-      'systemctl enable voice-emotion',
-      'systemctl start voice-emotion',
-
-      // Configure nginx as reverse proxy for port 80
+      // Configure nginx - serve React static + proxy /api to FastAPI
       `cat > /etc/nginx/conf.d/voice-emotion.conf << 'NGINXEOF'
 server {
     listen 80;
     server_name _;
 
+    # Serve React frontend
+    root /var/www/voice-emotion;
+    index index.html;
+
+    # React SPA routing
     location / {
-        proxy_pass http://localhost:8501;
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API requests to FastAPI
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 86400;
+        proxy_read_timeout 300;
+        proxy_connect_timeout 300;
+
+        # Handle large audio uploads
+        client_max_body_size 50M;
+    }
+
+    # Static file caching
+    location ~* \\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
     }
 }
 NGINXEOF`,
+
+      // Remove default nginx config
       'rm -f /etc/nginx/conf.d/default.conf',
+      'rm -f /etc/nginx/sites-enabled/default',
+
+      // Enable and start services
+      'systemctl daemon-reload',
+      'systemctl enable voice-emotion-api',
+      'systemctl start voice-emotion-api',
       'systemctl enable nginx',
       'systemctl start nginx',
+
+      'echo "Setup complete at $(date)"',
     );
 
     // Get latest Amazon Linux 2023 AMI
@@ -190,9 +222,8 @@ NGINXEOF`,
     launchTemplate.addDependency(instanceProfile);
 
     // Try different AZs for Spot capacity - prefer cheapest AZ
-    // Fall back to other subnets if first fails
     const preferredSubnet = vpc.publicSubnets.find(s =>
-      s.availabilityZone.endsWith('a') // Usually has best Spot availability
+      s.availabilityZone.endsWith('a')
     ) || vpc.publicSubnets[0];
 
     // Create EC2 instance using Launch Template

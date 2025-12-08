@@ -79,5 +79,9 @@ cdk/bin/*.d.ts
 cdk/lib/*.js
 cdk/lib/*.d.ts
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
 # Test samples (large audio files)
 test_samples/
