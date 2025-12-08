@@ -1,4 +1,4 @@
-# Environment variables (NEVER commit!)
+# Environment variables
 .env
 .env.local
 .env.*.local
@@ -15,8 +15,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-# Python lib directories (but not cdk/lib!)
-/lib/
+lib/
 lib64/
 parts/
 sdist/
@@ -30,9 +29,6 @@ wheels/
 .venv/
 venv/
 ENV/
-
-# uv
-uv.lock
 
 # IDE
 .idea/
@@ -68,16 +64,8 @@ context_portal/
 # Jupyter
 .ipynb_checkpoints/
 
-# Node/CDK
+# Node
 node_modules/
-cdk/node_modules/
-cdk/cdk.out/
-cdk/*.js
-cdk/*.d.ts
-cdk/bin/*.js
-cdk/bin/*.d.ts
-cdk/lib/*.js
-cdk/lib/*.d.ts
 
 # Frontend
 frontend/node_modules/

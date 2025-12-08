@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import './App.css'
 
 interface EmotionResult {
@@ -24,6 +24,70 @@ type RecordingState = 'idle' | 'recording' | 'processing'
 
 const API_BASE = '/api'
 
+// Convert audio blob to WAV format
+async function convertToWav(audioBlob: Blob, sampleRate: number = 16000): Promise<Blob> {
+  const audioContext = new AudioContext({ sampleRate })
+  const arrayBuffer = await audioBlob.arrayBuffer()
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+
+  // Get audio data (mono)
+  const channelData = audioBuffer.getChannelData(0)
+
+  // Resample if needed
+  let samples: Float32Array
+  if (audioBuffer.sampleRate !== sampleRate) {
+    const ratio = audioBuffer.sampleRate / sampleRate
+    const newLength = Math.round(channelData.length / ratio)
+    samples = new Float32Array(newLength)
+    for (let i = 0; i < newLength; i++) {
+      samples[i] = channelData[Math.round(i * ratio)]
+    }
+  } else {
+    samples = channelData
+  }
+
+  // Convert to 16-bit PCM
+  const pcmData = new Int16Array(samples.length)
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF
+  }
+
+  // Create WAV file
+  const wavBuffer = new ArrayBuffer(44 + pcmData.length * 2)
+  const view = new DataView(wavBuffer)
+
+  // WAV header
+  const writeString = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) {
+      view.setUint8(offset + i, str.charCodeAt(i))
+    }
+  }
+
+  writeString(0, 'RIFF')
+  view.setUint32(4, 36 + pcmData.length * 2, true)
+  writeString(8, 'WAVE')
+  writeString(12, 'fmt ')
+  view.setUint32(16, 16, true) // Subchunk1Size
+  view.setUint16(20, 1, true) // AudioFormat (PCM)
+  view.setUint16(22, 1, true) // NumChannels (mono)
+  view.setUint32(24, sampleRate, true) // SampleRate
+  view.setUint32(28, sampleRate * 2, true) // ByteRate
+  view.setUint16(32, 2, true) // BlockAlign
+  view.setUint16(34, 16, true) // BitsPerSample
+  writeString(36, 'data')
+  view.setUint32(40, pcmData.length * 2, true)
+
+  // Write PCM data
+  const pcmOffset = 44
+  for (let i = 0; i < pcmData.length; i++) {
+    view.setInt16(pcmOffset + i * 2, pcmData[i], true)
+  }
+
+  await audioContext.close()
+  return new Blob([wavBuffer], { type: 'audio/wav' })
+}
+
 function App() {
   const [state, setState] = useState<RecordingState>('idle')
   const [result, setResult] = useState<AnalyzeResponse | null>(null)
@@ -34,24 +98,34 @@ function App() {
   const chunksRef = useRef<Blob[]>([])
 
   // Check server health on mount
-  useState(() => {
+  useEffect(() => {
     fetch(`${API_BASE}/health`)
       .then(res => res.json())
       .then(data => setIsServerReady(data.models_loaded))
       .catch(() => setIsServerReady(false))
-  })
+  }, [])
 
   const startRecording = useCallback(async () => {
     try {
       setError(null)
       setResult(null)
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-
-      // Use webm for better browser compatibility
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true
+        }
       })
+
+      // Try to use WAV if supported, otherwise use webm
+      let mimeType = 'audio/webm;codecs=opus'
+      if (MediaRecorder.isTypeSupported('audio/wav')) {
+        mimeType = 'audio/wav'
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType })
 
       chunksRef.current = []
 
@@ -66,10 +140,18 @@ function App() {
         stream.getTracks().forEach(track => track.stop())
 
         // Create blob from chunks
-        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' })
+        const audioBlob = new Blob(chunksRef.current, { type: mimeType })
 
-        // Send to API
-        await analyzeAudio(audioBlob)
+        // Convert to WAV for backend compatibility
+        setState('processing')
+        try {
+          const wavBlob = await convertToWav(audioBlob)
+          await analyzeAudio(wavBlob)
+        } catch (convErr) {
+          console.error('Conversion error:', convErr)
+          setError('Failed to process audio. Please try again.')
+          setState('idle')
+        }
       }
 
       mediaRecorderRef.current = mediaRecorder
@@ -85,14 +167,13 @@ function App() {
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && state === 'recording') {
       mediaRecorderRef.current.stop()
-      setState('processing')
     }
   }, [state])
 
   const analyzeAudio = async (audioBlob: Blob) => {
     try {
       const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
+      formData.append('audio', audioBlob, 'recording.wav')
 
       const response = await fetch(`${API_BASE}/analyze`, {
         method: 'POST',
