@@ -54,8 +54,30 @@ Real-time speech emotion recognition from your microphone using AI. Detects **7 
 
 - **Python**: 3.10 or higher
 - **Node.js**: 18 or higher
+- **ffmpeg**: Required for audio processing
 - **RAM**: 4GB minimum (8GB recommended)
 - **Disk**: ~2GB for model downloads
+
+### Installing ffmpeg
+
+**macOS**:
+```bash
+brew install ffmpeg
+```
+
+**Ubuntu/Debian**:
+```bash
+sudo apt install ffmpeg
+```
+
+**Windows**:
+```bash
+# Using Chocolatey
+choco install ffmpeg
+
+# Or using Scoop
+scoop install ffmpeg
+```
 
 ## Quick Start
 
