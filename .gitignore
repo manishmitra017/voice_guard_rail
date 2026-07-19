@@ -55,7 +55,8 @@ temp/
 *.log
 
 # Model cache (downloaded separately)
-models/
+models/*
+!models/faster-whisper-base/
 wav2vec2_checkpoints/
 
 # Context portal (not part of this project)

@@ -37,6 +37,11 @@ Real-time speech emotion recognition from your microphone using AI. Detects **7 
 |-------|---------|------|
 | `openai/whisper-base` | Speech-to-Text | ~140MB |
 | `firdhokk/speech-emotion-recognition-with-openai-whisper-large-v3` | Emotion Detection | ~600MB |
+| `Systran/faster-whisper-base` | Speech-to-Text (CTranslate2) | ~141MB |
+
+`Systran/faster-whisper-base` is vendored in-repo at `models/faster-whisper-base/` (via Git LFS)
+so it works without network access. The other models are still downloaded from HuggingFace on
+first run.
 
 ## Detected Emotions
 
@@ -81,10 +86,21 @@ scoop install ffmpeg
 
 ## Quick Start
 
+> **Note:** This repo stores `models/faster-whisper-base/` via [Git LFS](https://git-lfs.com).
+> Install `git-lfs` **before** cloning, or `model.bin` arrives as a small text pointer
+> instead of the real weights.
+
 ```bash
+# Install Git LFS (once per machine)
+brew install git-lfs        # macOS; apt-get install git-lfs on Debian/Ubuntu
+git lfs install
+
 # Clone the repository
 git clone https://github.com/manishmitra017/voice_guard_rail.git
 cd voice_guard_rail
+
+# If you cloned before installing git-lfs, fetch the weights now
+git lfs pull
 
 # Install uv (Python package manager)
 curl -LsSf https://astral.sh/uv/install.sh | sh
