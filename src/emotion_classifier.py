@@ -7,6 +7,8 @@ Emotions: Angry, Disgust, Fearful, Happy, Neutral, Sad, Surprised
 """
 
 from transformers import AutoModelForAudioClassification, AutoFeatureExtractor
+
+from .model_paths import resolve
 import librosa
 import torch
 import numpy as np
@@ -43,9 +45,10 @@ class EmotionClassifier:
 
     def load_model(self):
         """Load the Whisper-based emotion model."""
-        self._model = AutoModelForAudioClassification.from_pretrained(self.MODEL_ID)
+        model_path = resolve("whisper-emotion")
+        self._model = AutoModelForAudioClassification.from_pretrained(model_path)
         self._feature_extractor = AutoFeatureExtractor.from_pretrained(
-            self.MODEL_ID,
+            model_path,
             do_normalize=True
         )
         self._id2label = self._model.config.id2label

@@ -76,12 +76,15 @@ class SenseVoiceAnalyzer:
         try:
             from funasr import AutoModel
 
+            from .model_paths import resolve
+
             self._model = AutoModel(
-                model=self.MODEL_ID,
-                vad_model="fsmn-vad",
+                model=resolve("sensevoice-small"),
+                vad_model=resolve("fsmn-vad"),
                 vad_kwargs={"max_single_segment_time": 30000},
                 device=self.device,
                 hub="hf",
+                disable_update=True,
             )
             print(f"SenseVoice model loaded on {self.device}")
         except ImportError:

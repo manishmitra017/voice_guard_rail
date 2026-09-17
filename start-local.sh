@@ -13,6 +13,15 @@ NC='\033[0m' # No Color
 
 echo -e "${BLUE}Starting Voice Emotion Detector...${NC}"
 
+# Offline mode: use only the models vendored in models/, never reach HuggingFace.
+# Enable with: VG_OFFLINE=1 ./start-local.sh
+if [ "$VG_OFFLINE" = "1" ]; then
+    echo "Offline mode: loading models from ./models only"
+    export VG_OFFLINE=1
+    export HF_HUB_OFFLINE=1
+    export TRANSFORMERS_OFFLINE=1
+fi
+
 # Kill any existing processes on ports 8000 and 3000
 echo "Cleaning up existing processes..."
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true

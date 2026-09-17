@@ -32,7 +32,12 @@ class SpeechTranscriber:
 
     def load_model(self):
         """Load the Whisper model. Call this once before transcribing."""
-        self._model = whisper.load_model(self.model_size)
+        from .model_paths import whisper_download_root
+
+        self._model = whisper.load_model(
+            self.model_size,
+            download_root=whisper_download_root(),
+        )
 
     def _load_audio(self, audio_path: str) -> np.ndarray:
         """Load audio using librosa (no ffmpeg needed)."""

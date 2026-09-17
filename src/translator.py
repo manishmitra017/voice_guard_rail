@@ -177,9 +177,12 @@ class TranslationService:
         """Load the NLLB translation model."""
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
-        print(f"Loading translation model: {self.MODEL_ID}")
-        self._tokenizer = AutoTokenizer.from_pretrained(self.MODEL_ID)
-        self._model = AutoModelForSeq2SeqLM.from_pretrained(self.MODEL_ID)
+        from .model_paths import resolve
+
+        model_path = resolve("nllb-200-distilled-600M")
+        print(f"Loading translation model: {model_path}")
+        self._tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self._model = AutoModelForSeq2SeqLM.from_pretrained(model_path)
         self._model = self._model.to(self.device)
         print(f"Translation model loaded on {self.device}")
 

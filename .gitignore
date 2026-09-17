@@ -54,9 +54,10 @@ temp/
 # Logs
 *.log
 
-# Model cache (downloaded separately)
-models/*
-!models/faster-whisper-base/
+# Models are vendored in-repo via Git LFS (scripts/download_models.py)
+# so the app runs without HuggingFace access.
+models/.locks/
+models/**/.cache/
 wav2vec2_checkpoints/
 
 # Context portal (not part of this project)

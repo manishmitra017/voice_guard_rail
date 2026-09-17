@@ -35,13 +35,49 @@ Real-time speech emotion recognition from your microphone using AI. Detects **7 
 
 | Model | Purpose | Size |
 |-------|---------|------|
-| `openai/whisper-base` | Speech-to-Text | ~140MB |
-| `firdhokk/speech-emotion-recognition-with-openai-whisper-large-v3` | Emotion Detection | ~600MB |
-| `Systran/faster-whisper-base` | Speech-to-Text (CTranslate2) | ~141MB |
+| `FunAudioLLM/SenseVoiceSmall` | ASR + Emotion + Audio events | ~900MB |
+| `funasr/fsmn-vad` | Voice activity detection | ~2MB |
+| `facebook/nllb-200-distilled-600M` | Translation (200+ languages) | ~2.4GB |
+| `firdhokk/speech-emotion-recognition-with-openai-whisper-large-v3` | Emotion Detection (legacy path) | ~1.9GB |
+| `openai/whisper-base` | Speech-to-Text (legacy path) | ~140MB |
 
-`Systran/faster-whisper-base` is vendored in-repo at `models/faster-whisper-base/` (via Git LFS)
-so it works without network access. The other models are still downloaded from HuggingFace on
-first run.
+All models are vendored in-repo under `models/` via Git LFS, so the app runs on machines
+with no HuggingFace access. See [Running without HuggingFace access](#running-without-huggingface-access).
+
+## Running without HuggingFace access
+
+Models are loaded from `models/` when present, and only fall back to downloading from
+HuggingFace when a model is missing.
+
+### One-time setup (on a machine WITH internet)
+
+```bash
+python scripts/download_models.py     # fetches all models into models/
+git add models && git commit -m "Vendor models for offline use"
+git push                              # requires Git LFS (~5.5GB)
+```
+
+### On the restricted machine
+
+```bash
+git lfs install
+git clone <repo>                      # models come down with the clone
+uv sync                               # dependencies still come from PyPI
+VG_OFFLINE=1 ./start-local.sh
+```
+
+`VG_OFFLINE=1` sets `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE` and makes a missing model raise
+a clear error instead of silently attempting a download that will hang.
+
+### Options
+
+| Variable | Purpose |
+|----------|---------|
+| `VG_MODELS_DIR` | Load models from elsewhere, e.g. a shared network drive |
+| `VG_OFFLINE=1` | Never contact HuggingFace; fail fast if a model is missing |
+
+If you cannot push ~5.5GB through Git LFS, copy the `models/` directory to the target machine
+by USB or network share instead and point `VG_MODELS_DIR` at it.
 
 ## Detected Emotions
 
@@ -61,7 +97,7 @@ first run.
 - **Node.js**: 18 or higher
 - **ffmpeg**: Required for audio processing
 - **RAM**: 4GB minimum (8GB recommended)
-- **Disk**: ~2GB for model downloads
+- **Disk**: ~6GB for models
 
 ### Installing ffmpeg
 
