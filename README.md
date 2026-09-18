@@ -46,38 +46,65 @@ with no HuggingFace access. See [Running without HuggingFace access](#running-wi
 
 ## Running without HuggingFace access
 
-Models are loaded from `models/` when present, and only fall back to downloading from
-HuggingFace when a model is missing.
+All models are already committed to this repo under `models/` (~5.8GB via Git LFS), so a
+clone is all you need. Models are loaded from `models/` when present, and only fall back to
+downloading from HuggingFace when one is missing.
 
-### One-time setup (on a machine WITH internet)
-
-```bash
-python scripts/download_models.py     # fetches all models into models/
-git add models && git commit -m "Vendor models for offline use"
-git push                              # requires Git LFS (~5.5GB)
-```
-
-### On the restricted machine
+### Setup on a restricted machine
 
 ```bash
+# 1. Install Git LFS FIRST - before cloning
 git lfs install
-git clone <repo>                      # models come down with the clone
-uv sync                               # dependencies still come from PyPI
+
+# 2. Clone; the model weights come down with it
+git clone https://github.com/manishmitra017/voice_guard_rail.git
+cd voice_guard_rail
+
+# 3. Dependencies still come from PyPI, not HuggingFace
+uv sync
+cd frontend && npm install && cd ..
+
+# 4. Start in offline mode
 VG_OFFLINE=1 ./start-local.sh
 ```
 
+If you cloned *before* running `git lfs install`, the weights arrive as small text pointers
+instead of real files. Fix that with `git lfs pull`.
+
 `VG_OFFLINE=1` sets `HF_HUB_OFFLINE` / `TRANSFORMERS_OFFLINE` and makes a missing model raise
-a clear error instead of silently attempting a download that will hang.
+a clear error immediately, instead of hanging until a blocked connection times out. Use it on
+a restricted network so mistakes surface in seconds rather than minutes.
 
 ### Options
 
 | Variable | Purpose |
 |----------|---------|
-| `VG_MODELS_DIR` | Load models from elsewhere, e.g. a shared network drive |
+| `VG_MODELS_DIR` | Load models from elsewhere, e.g. a USB drive or network share |
 | `VG_OFFLINE=1` | Never contact HuggingFace; fail fast if a model is missing |
 
-If you cannot push ~5.5GB through Git LFS, copy the `models/` directory to the target machine
-by USB or network share instead and point `VG_MODELS_DIR` at it.
+### Refreshing the vendored models
+
+On a machine **with** internet:
+
+```bash
+python scripts/download_models.py     # re-fetch + reshard into models/
+git add models && git commit -m "Refresh vendored models"
+git push
+```
+
+### Notes and limits
+
+- **Sharded checkpoints.** GitHub rejects any single Git LFS file over 2GiB, so the two large
+  checkpoints are stored as 3 safetensors shards each (~1GB max). `from_pretrained()`
+  reassembles them via the generated index file, with no change in precision.
+  `scripts/download_models.py` reshards automatically.
+- **LFS bandwidth.** Each full clone pulls ~5.8GB against the account's monthly Git LFS
+  allowance. On an existing clone, `git lfs pull` is much cheaper than re-cloning.
+- **No-Git alternative.** If Git LFS is unavailable or over quota, copy the `models/`
+  directory to the target machine by USB or network share and point `VG_MODELS_DIR` at it.
+  No code changes are needed.
+- **SenseVoice + PyPI.** `funasr` pip-installs a model's `requirements.txt` at load time, so
+  the vendored copy deliberately omits that file. This needs PyPI, never HuggingFace.
 
 ## Detected Emotions
 
@@ -97,7 +124,7 @@ by USB or network share instead and point `VG_MODELS_DIR` at it.
 - **Node.js**: 18 or higher
 - **ffmpeg**: Required for audio processing
 - **RAM**: 4GB minimum (8GB recommended)
-- **Disk**: ~6GB for models
+- **Disk**: ~6GB for models (already included in the clone)
 
 ### Installing ffmpeg
 
@@ -122,9 +149,9 @@ scoop install ffmpeg
 
 ## Quick Start
 
-> **Note:** This repo stores `models/faster-whisper-base/` via [Git LFS](https://git-lfs.com).
-> Install `git-lfs` **before** cloning, or `model.bin` arrives as a small text pointer
-> instead of the real weights.
+> **Note:** This repo stores all model weights under `models/` via [Git LFS](https://git-lfs.com)
+> (~5.8GB). Install `git-lfs` **before** cloning, or the weights arrive as small text
+> pointers instead of real files.
 
 ```bash
 # Install Git LFS (once per machine)
